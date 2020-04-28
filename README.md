@@ -11,6 +11,9 @@
    already)
 5. Edit the SSM\_PREFIX env var in /scripts/create-production-docker-compose.sh
 6. Put an sql, or sql.gz file in `/db-seeds/seeds.sql.gz` which has the seeds for your db test data (incl. structure)
+7. If you are going to use [OpenID Connect authentication](#openid-auth) you should edit `docker-config/entrypoint.sh`
+   and change the LocationMatch setting in the openid config to match whatever file you want to present to users when
+   they logout. (or just update `src/loggedout.php` with your content).
 
 ## What you get
 

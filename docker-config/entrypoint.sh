@@ -44,22 +44,18 @@ if [ "$OPENID_ENABLED" == "true" ]; then
     # MetaData URL for AWS cognito is:
     #   https://cognito-idp.<REGION>.amazonaws.com/<USER_POOL_ID>/.well-known/openid-configuration
     
-    # TODO From ENV (all 3)
     OIDCProviderMetadataURL $OPENID_METADATA_URL
     OIDCClientID $OPENID_CLIENT_ID
     OIDCClientSecret $OPENID_SECRET
     
     # OIDCRedirectURI is a vanity URL that must point to a path protected by this module but must NOT point to any content
     OIDCRedirectURI $OPENID_REDIRECT_URL
-    # TODO From env/random See https://github.com/zmartzone/mod_auth_openidc/blob/master/auth_openidc.conf#L16 for what this is
     OIDCCryptoPassphrase $OPENID_CRYPTO_PASSPHRASE
-
     
     <LocationMatch "^/(?!loggedout.php)">
        AuthType openid-connect
        Require valid-user
     </LocationMatch>
-
 EOF
 
   # Some open connect providers aren't giving the logout uri in the metadata (looking at you AWS Cognito!) so if it's
