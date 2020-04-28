@@ -23,10 +23,10 @@
     4. A script `/docker-config/entrypoint.sh` which does the following:
         1. Loads some SSM params (see below) and puts them into a config file inside the container `/secrets/config.php`
            which has the following things set:
-            1. $_CONF['db_name'] set to env var DB_NAME
-            2. $_CONF['db_host'] set to env var DB_HOST
-            3. $_CONF['db_user'] set to env var DB_USER
-            4. $_CONF['db_pass'] set to env var DB_PASS
+            1. $_CONF['db_name'] set to env var DB\_NAME
+            2. $_CONF['db_host'] set to env var DB\_HOST
+            3. $_CONF['db_user'] set to env var DB\_USER
+            4. $_CONF['db_pass'] set to env var DB\_PASS
             5. $_CONF['sslmode'] set to env var SSLMODE
             6. $_CONF['sslrootcert'] set to env var SSLROOTCERT
         2. Creates an htpasswd file in /secrets/htpasswd from the HTPASSWD_FILE env var
@@ -38,7 +38,9 @@
 3. Docker-compose file giving you 
     1. A postgres 9.6.11 dependency with a persistent data volume which is seeded from `/db-seeds/*.sql.gz`
     2. A default user (testdb), database (testdb), and password for postgres
-    3. Your src/ directory mounted into /var/www/html so it will update live if you change any files while the
+    3. An nginx reverse proxy providing a self-signed SSL cert and proxying to your php service (this helps with
+       testing integrations like oauth etc which require redirecting back to an SSL endpoint)
+    4. Your src/ directory mounted into /var/www/html so it will update live if you change any files while the
        container is running
 4. A script to generate a docker-compose file (which is gitignored) which will have your production
    credentials in (loaded from SSM, so you will need to run with a valid AWS\_PROFILE)
@@ -62,14 +64,14 @@
 ## To run the docker container without the docker-compose file
 
 1. Env vars:
-    1. DB_HOST: Host name of the postgres instance to connect to
-    2. DB_NAME: Name of the database inside the postgres host
-    3. DB_USER: Username to auth for postgres
-    4. DB_PASS: Password to auth for postgres
+    1. DB\_HOST: Host name of the postgres instance to connect to
+    2. DB\_NAME: Name of the database inside the postgres host
+    3. DB\_USER: Username to auth for postgres
+    4. DB\_PASS: Password to auth for postgres
     5. SSLMODE: PHP postgres SSL mode (verify-full suggested for production)
     6. SSLROOTCERT: The path to the SSL cert for verifying the SSL connection to the server (for AWS RDS (which is
        included in the docker container for you) set this to `/secrets/rds-combined-ca-bundle.pem`)
-    7. HTPASSWD_FILE: The content to put into the htpasswd file
+    7. HTPASSWD\_FILE: The content to put into the htpasswd file
 
 # TODO
 
