@@ -55,7 +55,7 @@ if [ "$OPENID_ENABLED" == "true" ]; then
     OIDCCryptoPassphrase $OPENID_CRYPTO_PASSPHRASE
 
     
-    <LocationMatch "^/(?!loggedout.html)">
+    <LocationMatch "^/(?!loggedout.php)">
        AuthType openid-connect
        Require valid-user
     </LocationMatch>

@@ -11,7 +11,7 @@
 <body>
 <h1>Hello, world!</h1>
 <p>Aloha!</p>
-<p><a href="/redirect_uri?logout=https%3A%2F%2F127.0.0.1%2Floggedout.html">Logout</a></p>
+<p><a href="/redirect_uri?logout=https%3A%2F%2F127.0.0.1%2Floggedout.php">Logout</a></p>
 <div class="footer">
     <p>&copy; Copyright Jonathan Harden 2020</p>
 <p>
