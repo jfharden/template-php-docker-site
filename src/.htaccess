@@ -1,4 +1,0 @@
-AuthType Basic
-AuthName "Authorisation Required"
-AuthUserFile "/secrets/htpasswd"
-require valid-user

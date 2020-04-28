@@ -16,6 +16,13 @@ services:
       HTPASSWD_FILE: |
         foo:$$apr1$$3wYuLEgT$$e3kDOxsdSy4WAMve/EFW//
         wibble:$$apr1$$TN46Uqtv$$iUmCCp0RaoZ9KZjJy5mNt0
+      # OPENID_ENABLED: "true"
+      # OPENID_METADATA_URL: 
+      # OPENID_END_SESSION_ENDPOINT: 
+      # OPENID_CLIENT_ID: 
+      # OPENID_SECRET: 
+      # OPENID_REDIRECT_URL: 
+      # OPENID_CRYPTO_PASSPHRASE: 
     depends_on:
       - postgres-dev
       - nginx-reverse-proxy
