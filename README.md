@@ -70,3 +70,10 @@
     6. SSLROOTCERT: The path to the SSL cert for verifying the SSL connection to the server (for AWS RDS (which is
        included in the docker container for you) set this to `/secrets/rds-combined-ca-bundle.pem`)
     7. HTPASSWD_FILE: The content to put into the htpasswd file
+
+# TODO
+
+Replace http basic auth aith a openidc auth:
+
+    apt-get install libapache2-mod-auth-openidc
+    a2enmod auth_openidc

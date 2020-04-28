@@ -2,7 +2,11 @@ FROM php:5.6-apache
 
 LABEL maintainer="jfharden@gmail.com"
 
-RUN docker-php-ext-install pgsql \
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+  && apt-get autoremove --purge -y \
+  && apt-get clean \
+  && docker-php-ext-install pgsql \
   && mkdir /secrets/ \
   && chown root:www-data /secrets \
   && chmod 550 /secrets \
