@@ -17,7 +17,9 @@
 1. Inside the docker container
     1. Hardened PHP service running php 5.6 and configured for a UTC timezone (edit `/docker-config/date.timezone.ini`
        if you wish to have a different server timezone) running with apache
-    2. By default the service will be protected with an htaccess file (populated from HTPASSWD\_FILE env var)
+    2. You can choose to have no auth (don't set HTPASSWD\_FILE env var, or OPENID\_ENABLED env vars), but you can also
+       enable HTTP Basic Auth by providing an htpasswd file in the HTPASSWD_FILE env var, or openid connect by setting
+       the env var OPENID_ENABLED=true. If you do this you will need to provide aditional configuration (see later)
     3. A /secrets directory, outside the apache web directory, accessible by your code to store things like
        database config etc (add more things as you wish in the Dockerfile)
     4. A script `/docker-config/entrypoint.sh` which does the following:
@@ -54,6 +56,41 @@
         3. verify (run the tests)
         4. destroy (docker-compose down (will also remove the postgres volume used in the tests))
 
+### OpenID Connect authentication
+
+This has been tested against AWS Cognito with openid enabled (see [Robert Broekelmanns post on medium](https://medium.com/@robert.broeckelmann/openid-connect-authorization-code-flow-with-aws-cognito-246997abd11a)
+for the guide I followed to learn about setting up Cognito user pools and app clients).
+
+To enable OpenID auth you need to set the following env vars:
+
+Env var | Value | Notes
+--- | --- | ---
+OPENID\_ENABLED | "true" | Must be the string true
+OPENID\_METADATA\_URL | The well known metadata url for your provider | In cognito this is `https://cognito-idp.<REGION>.amazonaws.com/<COGNITO_USER_POOL_ID>/.well-known/openid-configuration`
+OPENID\_CLIENT\_ID | The clientid for your client as specified by your open id provider |
+OPENID\_SECRET | The client secret for your clientas specified by your open id provider |
+OPENID\_REDIRECT\_URL | The redirect URI which your provider will return the user to in your application | This needs to be set to `https://<YOUR_DOMAIN>/redirect_uri` to match the apache module configuration
+OPENID\_CRYPTO\_PASSPHRASE | The passpharse mod\_auth\_openidc will use to encrypt secrets | See the [mod\_auth\_openidc config file for more info](https://github.com/zmartzone/mod_auth_openidc/blob/master/auth_openidc.conf#L16)
+OPENID\_END\_SESSION\_ENDPOINT | The logout url for your open id provider | Some providers (looking at you AWS Cognito) do not provide this from the metadata endpoint, for any provider that doesn't you will need to set this explicitly.
+
+***Special notes about OPENID\_END\_SESSION\_ENDPOINT***
+
+**Note:** In the following the logout\_uri parameter in the OPENID\_END\_SESSION\_ENDPOINT, the logout parameter in the
+logout link on your site, and the "Sign out URL(s)" in the AWS Cognito "App Client Settings" are all _identical_.
+
+For AWS Cognito the OPENID\_END\_SESSION\_ENDPOINT env var should be:
+
+    https://<AMAZON_COGNITO_DOMAIN>/logout?client_id=<APP_CLIENT_ID>&logout_uri=<SIGN_OUT_URL_AS_SET_IN_COGNITO_APP_CLIENT_SETTINGS>
+
+The logout\_uri parameter needs to be a page in your site, which is _not_ protected by openid connect (this is defaulted to `src/loggedout.php` in our config).
+
+In your app a logout link needs to be of this format:
+
+    https://<YOUR_DOMAIN>/redirect_uri?logout=https%3A%2F%2F127.0.0.1%2Floggedout.php
+
+**Note:** The logout parameter has to be IDENITICAL (but URI encoded!) to the "Sign out URL(s)" you specified in the AWS Cognito "App Client Settings"
+
+
 ## Requirements
 
 ## To build the project
@@ -72,10 +109,3 @@
     6. SSLROOTCERT: The path to the SSL cert for verifying the SSL connection to the server (for AWS RDS (which is
        included in the docker container for you) set this to `/secrets/rds-combined-ca-bundle.pem`)
     7. HTPASSWD\_FILE: The content to put into the htpasswd file
-
-# TODO
-
-Replace http basic auth aith a openidc auth:
-
-    apt-get install libapache2-mod-auth-openidc
-    a2enmod auth_openidc
