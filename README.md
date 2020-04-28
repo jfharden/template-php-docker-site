@@ -19,7 +19,8 @@
        if you wish to have a different server timezone) running with apache
     2. You can choose to have no auth (don't set HTPASSWD\_FILE env var, or OPENID\_ENABLED env vars), but you can also
        enable HTTP Basic Auth by providing an htpasswd file in the HTPASSWD_FILE env var, or openid connect by setting
-       the env var OPENID_ENABLED=true. If you do this you will need to provide aditional configuration (see later)
+       the env var OPENID_ENABLED=true. If you do this you will need to provide aditional configuration.
+       See [OpenID Connect authentication](#openid-auth).
     3. A /secrets directory, outside the apache web directory, accessible by your code to store things like
        database config etc (add more things as you wish in the Dockerfile)
     4. A script `/docker-config/entrypoint.sh` which does the following:
@@ -31,21 +32,34 @@
             4. $_CONF['db_pass'] set to env var DB\_PASS
             5. $_CONF['sslmode'] set to env var SSLMODE
             6. $_CONF['sslrootcert'] set to env var SSLROOTCERT
-        2. Creates an htpasswd file in /secrets/htpasswd from the HTPASSWD_FILE env var
-        3. Makes a /sessions directory which php is configured to use for storing session.
-        4. Calls the entrypoint of the php container with whatever command you chose (it defaults to running apache)
-        5. Unsets all the env vars at the end so they can't be seen anymore
+        2. Creates an htpasswd file in /secrets/htpasswd from the HTPASSWD_FILE env var, and enables basic auth if the
+           HTPASSWD\_FILE env var is set.
+        3. Creates an apache config for openid connect auth (using mod\_auth\_openidc) if the OPENID\_ENABLED env var
+           is set to "true". (See later for discussion of other variables which need to be set for this to work).
+        4. Makes a /sessions directory which php is configured to use for storing session.
+        5. Calls the entrypoint of the php container with whatever command you chose (it defaults to running apache)
+        6. Unsets all the env vars at the end so they can't be seen anymore
     5. The RDS SSL combined ca bundle inside the container at `/secrets/rds-combined-ca-bundle.pem` giving you verified
        SSL connections to AWS RDS instances
 3. Docker-compose file giving you 
-    1. A postgres 9.6.11 dependency with a persistent data volume which is seeded from `/db-seeds/*.sql.gz`
+    1. A postgres 9.6.11 dependency for your app with a persistent data volume which is seeded from `/db-seeds/*.sql.gz`
     2. A default user (testdb), database (testdb), and password for postgres
     3. An nginx reverse proxy providing a self-signed SSL cert and proxying to your php service (this helps with
-       testing integrations like oauth etc which require redirecting back to an SSL endpoint)
+       testing integrations like oauth etc which require redirecting back to an SSL endpoint), this is exposed on
+       https://10.100.0.4
     4. Your src/ directory mounted into /var/www/html so it will update live if you change any files while the
-       container is running
+       container is running. This is exposed on http://10.100.0.2 or via https on https://10.100.0.4
+    5. A keycloak server with some defaults to mean you can locally do openid authentication during testing. (The
+       included default openid user is foo with password bar. The keycloak admin interface is exposed on 
+       http://10.100.0.6:8080
+    6. A postgres 9.6.11 dependency for keycloak
 4. A script to generate a docker-compose file (which is gitignored) which will have your production
    credentials in (loaded from SSM, so you will need to run with a valid AWS\_PROFILE)
+5. A couple of scripts for improting and exporting the keycloak settings (if you change them you can persist them
+   by running the `scripts/keycloak-export.sh` script, this will update `keycloak-config/local_realm.json` with your
+   changes.
+6. An example docker-compose `docker-compose.cognito.example.yaml` file for doing local development against a cognito
+   user pool
 5. Terratest tests which will
     1. Build and launch the docker file
     2. Run a few tests to check for hardening, htpasswd basic auth, and that index.php can be retrieved.
@@ -56,7 +70,7 @@
         3. verify (run the tests)
         4. destroy (docker-compose down (will also remove the postgres volume used in the tests))
 
-### OpenID Connect authentication
+### <a id="openid-auth">OpenID Connect authentication</a>
 
 This has been tested against AWS Cognito with openid enabled (see [Robert Broekelmanns post on medium](https://medium.com/@robert.broeckelmann/openid-connect-authorization-code-flow-with-aws-cognito-246997abd11a)
 for the guide I followed to learn about setting up Cognito user pools and app clients).
@@ -108,4 +122,6 @@ In your app a logout link needs to be of this format:
     5. SSLMODE: PHP postgres SSL mode (verify-full suggested for production)
     6. SSLROOTCERT: The path to the SSL cert for verifying the SSL connection to the server (for AWS RDS (which is
        included in the docker container for you) set this to `/secrets/rds-combined-ca-bundle.pem`)
-    7. HTPASSWD\_FILE: The content to put into the htpasswd file
+    7. To optionally enable auth either:
+        1. HTPASSWD\_FILE: The content to put into the htpasswd file
+        2. OPENID\_ENABLED=true - See [OpenID Connect authentication](#openid-auth)

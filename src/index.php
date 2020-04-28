@@ -11,7 +11,24 @@
 <body>
 <h1>Hello, world!</h1>
 <p>Aloha!</p>
-<p><a href="/redirect_uri?logout=https%3A%2F%2F127.0.0.1%2Floggedout.php">Logout</a></p>
+<?php
+	function getServerPort() {
+		if (array_key_exists('HTTP_X_FORWARDED_PORT', $_SERVER)) {
+			return $_SERVER["HTTP_X_FORWARDED_PORT"];
+		} else if (array_key_exists('SERVER_PORT', $_SERVER)) {
+			return $_SERVER["SERVER_PORT"];
+		} else {
+			return "80";
+		}
+	}
+
+	$ip = $_SERVER["HTTP_HOST"];
+
+	$scheme = getServerPort() == "443" ? "https" : "http";
+
+	$logged_out_uri = urlencode("$scheme://$ip/loggedout.php");
+?>
+<p><a href="/redirect_uri?logout=<?=$logged_out_uri?>">Logout</a></p>
 <div class="footer">
     <p>&copy; Copyright Jonathan Harden 2020</p>
 <p>
