@@ -53,8 +53,7 @@ services:
         ipv4_address: 10.100.0.4
 
   keycloak:
-    # image: quay.io/keycloak/keycloak:9.0.3
-    image: jboss/keycloak:9.0.3
+    image: quay.io/keycloak/keycloak:9.0.3
     ports:
       - 8080:8080
     volumes:
