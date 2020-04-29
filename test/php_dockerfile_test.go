@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,19 +61,23 @@ func TestHtpasswdAuth(t *testing.T) {
 	runTestsWithDockerComposeFile(t, options)
 }
 
-// func TestOpenIdAuth(t *testing.T) {
-// 	options := &RunTestOptions{
-// 		DockerComposeFile: "docker-compose.openid.yaml",
-// 		Validators:        map[string]func(*testing.T){
-// 		},
-// 		// Keycloak tages an age to start up
-// 		// TODO Make this wait more intelligent, can't live with this wait time!
-// 		WaitForReady: func() { time.Sleep(60 * time.Second) },
-// 		EnvVars:      map[string]string{},
-// 	}
-//
-// 	runTestsWithDockerComposeFile(t, options)
-// }
+func TestOpenIDAuth(t *testing.T) {
+	t.Parallel()
+
+	options := &RunTestOptions{
+		DockerComposeFile: "docker-compose.openid.yaml",
+		Validators: map[string]func(*testing.T, *RunTestOptions){
+			"ValidateRequiresOpenIDAuth":       validateRequiresOpenIDAuth,
+			"ValidateLoggedOutDoesNotNeedAuth": validateLoggedOutDoesNotNeedAuth,
+		},
+		WaitForReady: func() { time.Sleep(10 * time.Second) },
+		EnvVars: map[string]string{
+			"HTTP_PORT": "8380",
+		},
+	}
+
+	runTestsWithDockerComposeFile(t, options)
+}
 
 func runTestsWithDockerComposeFile(t *testing.T, options *RunTestOptions) {
 	dockerOptions := &docker.Options{
@@ -108,6 +113,39 @@ func validateRequiresAuth(t *testing.T, options *RunTestOptions) {
 
 	assert.Equal(t, 401, statusCode)
 	assert.Contains(t, body, "Unauthorized")
+}
+
+func validateRequiresOpenIDAuth(t *testing.T, options *RunTestOptions) {
+	url := urlWithoutAuth(options, "index.php")
+
+	openIDHelper := OpenIDHelper{
+		ProtectedUrl: url,
+	}
+
+	resp, err := openIDHelper.InitiateAuthFlow()
+	if err != nil {
+		t.Fatalf("Failed to initiate openid auth flow: %s", err)
+		return
+	}
+
+	fmt.Println(string(resp.Body))
+
+	assert.Equal(t, 302, resp.StatusCode, "Not redriected when trying to visit a protected url")
+	assert.Equal(t, 1, len(resp.Headers["Location"]), "Wrong number of Location headers returned")
+	assert.True(t,
+		strings.HasPrefix(
+			resp.Headers["Location"][0],
+			fmt.Sprintf("http://%s/auth/realms/localrealm/protocol/openid-connect/auth?", keycloakHost(options)),
+		),
+		"Not redirected to the correct location when trying to visit a protected url unauthenticated",
+	)
+}
+
+func validateLoggedOutDoesNotNeedAuth(t *testing.T, options *RunTestOptions) {
+	statusCode, body := http_helper.HttpGet(t, urlWithoutAuth(options, "loggedout.php"), &tls.Config{})
+
+	assert.Equal(t, 200, statusCode)
+	assert.Contains(t, body, "Logged out")
 }
 
 func validateUnauthorizedPageExcludesSignature(t *testing.T, options *RunTestOptions) {
@@ -175,27 +213,31 @@ func getHeaders(t *testing.T, url string) http.Header {
 }
 
 func urlWithoutAuth(options *RunTestOptions, path string) string {
-	ip := appIp(options)
-	return fmt.Sprintf("http://%s/%s", ip, path)
+	host := appHost(options)
+	return fmt.Sprintf("http://%s/%s", host, path)
 }
 
 func urlWithBasicAuth(options *RunTestOptions, path string) string {
-	ip := appIp(options)
-	return fmt.Sprintf("http://foo:bar@%s/%s", ip, path)
+	host := appHost(options)
+	return fmt.Sprintf("http://foo:bar@%s/%s", host, path)
 }
 
-func appIp(options *RunTestOptions) string {
+func appHost(options *RunTestOptions) string {
 	port, ok := options.EnvVars["HTTP_PORT"]
 
 	if !ok {
 		port = "80"
 	}
 
-	ip, ok := options.EnvVars["APP_IP"]
+	return fmt.Sprintf("127.0.0.1:%s", port)
+}
+
+func keycloakHost(options *RunTestOptions) string {
+	port, ok := options.EnvVars["KEYCLOAK_PORT"]
 
 	if !ok {
-		ip = "127.0.0.1"
+		port = "8080"
 	}
 
-	return fmt.Sprintf("%s:%s", ip, port)
+	return fmt.Sprintf("127.0.0.1:%s", port)
 }
