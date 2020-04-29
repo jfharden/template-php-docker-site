@@ -16,26 +16,25 @@ import (
 
 type RunTestOptions struct {
 	DockerComposeFile string
-	Validators        []func(*testing.T, *RunTestOptions)
+	Validators        map[string]func(*testing.T, *RunTestOptions)
 	WaitForReady      func()
 	EnvVars           map[string]string
 }
 
 func TestDockerfile(t *testing.T) {
+	t.Parallel()
+
 	options := &RunTestOptions{
 		DockerComposeFile: "docker-compose.yaml",
-		Validators: []func(*testing.T, *RunTestOptions){
-			validateServerHeaderProd,
-			validatePhpHardeningConfigApplied,
-			validateDirectoryListingDenied,
-			validateIndexOk,
+		Validators: map[string]func(*testing.T, *RunTestOptions){
+			"ValidateServerHeader":     validateServerHeader,
+			"ValidatePhpHardening":     validatePhpHardeningConfigApplied,
+			"ValidateDirectoryListing": validateDirectoryListingDenied,
+			"ValidateIndexOk":          validateIndexOk,
 		},
 		WaitForReady: func() { time.Sleep(10 * time.Second) },
 		EnvVars: map[string]string{
-			"HTTP_PORT":   "8180",
-			"APP_IP":      "10.101.0.2",
-			"APP_DB_IP":   "10.101.0.3",
-			"SUBNET_CIDR": "10.101.0.0/24",
+			"HTTP_PORT": "8180",
 		},
 	}
 
@@ -43,19 +42,18 @@ func TestDockerfile(t *testing.T) {
 }
 
 func TestHtpasswdAuth(t *testing.T) {
+	t.Parallel()
+
 	options := &RunTestOptions{
 		DockerComposeFile: "docker-compose.htpasswd.yaml",
-		Validators: []func(*testing.T, *RunTestOptions){
-			validateRequiresAuth,
-			validateUnauthorizedPageExcludesSignature,
-			validateIndexOkHtpasswdAuth,
+		Validators: map[string]func(*testing.T, *RunTestOptions){
+			"ValidateRequiresAuth":                validateRequiresAuth,
+			"ValidateUnauthPageExcludesSignature": validateUnauthorizedPageExcludesSignature,
+			"ValidateIndexOkHtPasswdAuth":         validateIndexOkHtpasswdAuth,
 		},
 		WaitForReady: func() { time.Sleep(10 * time.Second) },
 		EnvVars: map[string]string{
-			"HTTP_PORT":   "8280",
-			"APP_IP":      "10.102.0.2",
-			"APP_DB_IP":   "10.102.0.3",
-			"SUBNET_CIDR": "10.102.0.0/24",
+			"HTTP_PORT": "8280",
 		},
 	}
 
@@ -65,7 +63,7 @@ func TestHtpasswdAuth(t *testing.T) {
 // func TestOpenIdAuth(t *testing.T) {
 // 	options := &RunTestOptions{
 // 		DockerComposeFile: "docker-compose.openid.yaml",
-// 		Validators:        []func(*testing.T){
+// 		Validators:        map[string]func(*testing.T){
 // 		},
 // 		// Keycloak tages an age to start up
 // 		// TODO Make this wait more intelligent, can't live with this wait time!
@@ -93,13 +91,14 @@ func runTestsWithDockerComposeFile(t *testing.T, options *RunTestOptions) {
 	test_structure.RunTestStage(t, "launch", func() {
 		docker.RunDockerCompose(t, dockerOptions, "-f", options.DockerComposeFile, "up", "-d")
 
-		// It takes postgres a while to complete startup, load the seeds and restart
 		options.WaitForReady()
 	})
 
 	test_structure.RunTestStage(t, "validate", func() {
-		for _, validator := range options.Validators {
-			validator(t, options)
+		for name, validator := range options.Validators {
+			t.Run(name, func(t *testing.T) {
+				validator(t, options)
+			})
 		}
 	})
 }
@@ -130,7 +129,7 @@ func validateIndexOkHtpasswdAuth(t *testing.T, options *RunTestOptions) {
 	assert.Equal(t, 200, statusCode)
 }
 
-func validateServerHeaderProd(t *testing.T, options *RunTestOptions) {
+func validateServerHeader(t *testing.T, options *RunTestOptions) {
 	headers := getHeaders(t, urlWithoutAuth(options, "index.php"))
 
 	serverHeaders := headers["Server"]
@@ -186,11 +185,17 @@ func urlWithBasicAuth(options *RunTestOptions, path string) string {
 }
 
 func appIp(options *RunTestOptions) string {
+	port, ok := options.EnvVars["HTTP_PORT"]
+
+	if !ok {
+		port = "80"
+	}
+
 	ip, ok := options.EnvVars["APP_IP"]
 
 	if !ok {
-		return "10.100.0.2"
+		ip = "127.0.0.1"
 	}
 
-	return ip
+	return fmt.Sprintf("%s:%s", ip, port)
 }
