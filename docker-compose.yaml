@@ -14,9 +14,6 @@ services:
       - postgres-dev
     volumes:
       - ./src/:/var/www/html/
-    networks:
-      app_net:
-        ipv4_address: ${APP_IP:-10.100.0.2}
 
   postgres-dev:
     image: postgres:9.6.11
@@ -27,17 +24,7 @@ services:
     volumes:
       - postgres-dev:/var/lib/postgresql/data
       - ./db-seeds/:/docker-entrypoint-initdb.d
-    networks:
-      app_net:
-        ipv4_address: ${APP_DB_IP:-10.100.0.3}
 
 volumes:
   postgres-dev:
     driver: local
-
-networks:
-  app_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: ${SUBNET_CIDR:-10.100.0.0/24}
