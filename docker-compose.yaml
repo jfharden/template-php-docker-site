@@ -23,7 +23,7 @@ services:
       - POSTGRES_PASSWORD=ae9aGhi2ahlie6aeBos9ii8taex0ieChooQue1oqueith5eiyoo8quahtei7aideaviz4zuy0aesah6aboo0uRaingou2Oe7phah
     volumes:
       - postgres-dev:/var/lib/postgresql/data
-      - ./db-seeds/:/docker-entrypoint-initdb.d
+      - ./config/db-seeds/:/docker-entrypoint-initdb.d
 
 volumes:
   postgres-dev:

@@ -62,11 +62,11 @@ COPY --from=mod_builder /usr/lib/apache2/modules/mod_auth_openidc.so /opt/lib/ap
 RUN chmod 644 /opt/lib/apache2/modules/mod_auth_openidc.so \
   && a2enmod auth_openidc
 
-COPY docker-config/date.timezone.ini /usr/local/etc/php/conf.d/
-COPY docker-config/hardening.ini /usr/local/etc/php/conf.d/99-hardening.ini
-COPY docker-config/entrypoint.sh /entrypoint.sh
+COPY config/docker/date.timezone.ini /usr/local/etc/php/conf.d/
+COPY config/docker/hardening.ini /usr/local/etc/php/conf.d/99-hardening.ini
+COPY config/docker/entrypoint.sh /entrypoint.sh
 
-COPY --chown=root:www-data docker-config/rds-combined-ca-bundle.pem /secrets/rds-combined-ca-bundle.pem
+COPY --chown=root:www-data config/docker/rds-combined-ca-bundle.pem /secrets/rds-combined-ca-bundle.pem
 COPY --chown=www-data:www-data src/ /var/www/html/
 
 ENTRYPOINT ["/entrypoint.sh"]

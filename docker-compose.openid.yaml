@@ -1,6 +1,3 @@
-# WARNING: If you override the IP addresses in this file you need to either edit the keycloak-config/local_realm.json
-# to update them in there, or you need to edit keycloak after the config has loaded to change the IP addresses of the
-# configured client.
 version: '3'
 services:
   php-service:
@@ -35,7 +32,7 @@ services:
       - POSTGRES_PASSWORD=ae9aGhi2ahlie6aeBos9ii8taex0ieChooQue1oqueith5eiyoo8quahtei7aideaviz4zuy0aesah6aboo0uRaingou2Oe7phah
     volumes:
       - postgres-dev:/var/lib/postgresql/data
-      - ./db-seeds/:/docker-entrypoint-initdb.d
+      - ./config/db-seeds/:/docker-entrypoint-initdb.d
 
   postgres-keycloak:
     image: postgres:9.6.11
@@ -51,7 +48,7 @@ services:
     ports:
       - ${KEYCLOAK_PORT:-8080}:8080
     volumes:
-      - ./keycloak-config/:/keycloak-config/
+      - ./config/keycloak/:/keycloak-config/
     environment:
       KEYCLOAK_USER: localadmin
       KEYCLOAK_PASSWORD: hohjues3toh1eiVisothangeish4ohSh
