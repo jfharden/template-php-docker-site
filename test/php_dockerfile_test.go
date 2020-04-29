@@ -4,8 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -54,31 +52,65 @@ type SearchFieldQuery struct {
 }
 
 func TestDockerfile(t *testing.T) {
+	waitForReady := func() { time.Sleep(10 * time.Second) }
+
+	validators := []func(*testing.T){
+		validateServerHeaderProd,
+		validatePhpHardeningConfigApplied,
+		validateDirectoryListingDenied,
+		validateIndexOk,
+	}
+
+	runTestsWithDockerComposeFile(t, "docker-compose.yaml", validators, waitForReady)
+}
+
+func TestHtpasswdAuth(t *testing.T) {
+	waitForReady := func() { time.Sleep(10 * time.Second) }
+
+	validators := []func(*testing.T){
+		validateRequiresAuth,
+		validateUnauthorizedPageExcludesSignature,
+		validateIndexOkHtpasswdAuth,
+	}
+
+	runTestsWithDockerComposeFile(t, "docker-compose.htpasswd.yaml", validators, waitForReady)
+}
+
+// func TestOpenIdAuth(t *testing.T) {
+// 	// Keycloak tages an age to start up
+// 	// TODO Make this wait more intelligent, can't live with this wait time!
+// 	waitForReady := func() { time.Sleep(60 * time.Second) }
+//
+// 	validators := []func(*testing.T){
+// 	}
+//
+// 	runTestsWithDockerComposeFile(t, "docker-compose.openid.yaml", validators, waitForReady)
+// }
+
+func runTestsWithDockerComposeFile(t *testing.T, dockerfile string, validators []func(*testing.T), waitForReady func()) {
 	dockerOptions := &docker.Options{
 		WorkingDir: "../",
 	}
 
 	defer test_structure.RunTestStage(t, "destroy", func() {
-		docker.RunDockerCompose(t, dockerOptions, "down", "-v", "--rmi", "local")
+		docker.RunDockerCompose(t, dockerOptions, "-f", dockerfile, "down", "-v", "--rmi", "local")
 	})
 
 	test_structure.RunTestStage(t, "build", func() {
-		docker.RunDockerCompose(t, dockerOptions, "build", "--no-cache", "--force-rm")
+		docker.RunDockerCompose(t, dockerOptions, "-f", dockerfile, "build", "--no-cache", "--force-rm")
 	})
 
 	test_structure.RunTestStage(t, "launch", func() {
-		docker.RunDockerCompose(t, dockerOptions, "up", "-d")
+		docker.RunDockerCompose(t, dockerOptions, "-f", dockerfile, "up", "-d")
 
 		// It takes postgres a while to complete startup, load the seeds and restart
-		time.Sleep(10 * time.Second)
+		waitForReady()
 	})
 
 	test_structure.RunTestStage(t, "validate", func() {
-		validateRequiresAuth(t)
-		validateUnauthorizedPageExcludesSignature(t)
-		validateServerHeaderProd(t)
-		validatePhpHardeningConfigApplied(t)
-		validateDirectoryListingDenied(t)
+		for _, validator := range validators {
+			validator(t)
+		}
 	})
 }
 
@@ -96,6 +128,18 @@ func validateUnauthorizedPageExcludesSignature(t *testing.T) {
 	assert.NotContains(t, body, "Apache")
 }
 
+func validateIndexOk(t *testing.T) {
+	statusCode, _ := http_helper.HttpGet(t, "http://127.0.0.1/", &tls.Config{})
+
+	assert.Equal(t, 200, statusCode)
+}
+
+func validateIndexOkHtpasswdAuth(t *testing.T) {
+	statusCode, _ := http_helper.HttpGet(t, urlWithBasicAuth(""), &tls.Config{})
+
+	assert.Equal(t, 200, statusCode)
+}
+
 func validateServerHeaderProd(t *testing.T) {
 	headers := getHeaders(t, "http://127.0.0.1/index.php")
 
@@ -108,7 +152,7 @@ func validateServerHeaderProd(t *testing.T) {
 }
 
 func validatePhpHardeningConfigApplied(t *testing.T) {
-	headers := getHeaders(t, urlWithAuth(""))
+	headers := getHeaders(t, urlWithBasicAuth(""))
 
 	poweredByHeaders := headers["X-Powered-By"]
 
@@ -116,7 +160,7 @@ func validatePhpHardeningConfigApplied(t *testing.T) {
 }
 
 func validateDirectoryListingDenied(t *testing.T) {
-	statusCode, body := http_helper.HttpGet(t, urlWithAuth("images/"), &tls.Config{})
+	statusCode, body := http_helper.HttpGet(t, urlWithBasicAuth("images/"), &tls.Config{})
 
 	assert.Equal(t, 403, statusCode)
 	assert.Contains(t, body, "Forbidden")
@@ -141,6 +185,6 @@ func getHeaders(t *testing.T, url string) http.Header {
 	return resp.Header
 }
 
-func urlWithAuth(path string) string {
+func urlWithBasicAuth(path string) string {
 	return fmt.Sprintf("http://foo:bar@127.0.0.1/%s", path)
 }
