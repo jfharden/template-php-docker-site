@@ -49,21 +49,21 @@
         1. A postgres 9.6.11 dependency for your app with a persistent data volume which is seeded from `/db-seeds/*.sql.gz`
         2. A default user (testdb), database (testdb), and password for postgres
         3. Your src/ directory mounted into /var/www/html so it will update live if you change any files while the
-          container is running. This is exposed on http://10.100.0.2
+          container is running. This is exposed on port 80 by default (overridable with HTTP_PORT env var).
     2. In `docker-compose.htpasswd.yaml`
         1. Only the same as the common options but 'protected' by a default HTTP Basic Auth configuration with user foo
            and password bar.
     3. In `docker-compose.openid.yaml`
         1. A keycloak server with some defaults to mean you can locally do openid authentication during testing. (The
-          included default openid user is foo with password bar. The keycloak admin interface is exposed on 
-          http://10.100.0.6:8080
+           included default openid user is foo with password bar. The keycloak admin interface is exposed on 
+           port 8080 by default (overridable with env var KEYCLOAK_PORT)
         2. A postgres 9.6.11 dependency for keycloak
         3. Your local website protected by openid authentication against the local keycloak server. There is a
            pre-configured user with name foo and password bar.
     4. In `docker-compose.cognito.example.yaml`
         1. An nginx reverse proxy providing a self-signed SSL cert and proxying to your php service (this helps with
-          testing integrations like cognito which require redirecting back to an SSL endpoint), this is exposed on
-          https://10.100.0.4
+           testing integrations like cognito which require redirecting back to an SSL endpoint), this is exposed on
+           https://10.100.0.4
         2. Helpful (hopefully) example values for the OpenID configuration needed for cognito. See
            [OpenID Connect authentication](#openid-auth) for more help configuring this.
 4. A script to generate a docker-compose file (which is gitignored) which will have your production
