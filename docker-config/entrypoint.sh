@@ -18,14 +18,19 @@ echo "Created /secrets/config.php"
 
 if [ -n "$HTPASSWD_FILE" ]; then
   echo "HTPASSWD_FILE provided, setting up basic auth"
-  cat > /var/www/html/.htaccess <<-EOF
-    AuthType Basic
-    AuthName "Authorisation Required"
-    AuthUserFile "/secrets/htpasswd"
-    require valid-user
+  cat > /etc/apache2/conf-available/basic_auth.conf <<-EOF
+    <Location />
+      AuthType Basic
+      AuthName "Authorisation Required"
+      AuthUserFile "/secrets/htpasswd"
+      require valid-user
+    </Location>
 EOF
-  chown www-data:www-data /var/www/html/.htaccess
-  chmod 440 /var/www/html/.htaccess
+
+  chown www-data:www-data /etc/apache2/conf-available/basic_auth.conf
+  chmod 400 /etc/apache2/conf-available/basic_auth.conf
+  a2enconf basic_auth
+  echo "Created and enabled /etc/apache2/conf-available/basic_auth.conf"
 
   echo "$HTPASSWD_FILE" > /secrets/htpasswd
   chmod 440 /secrets/htpasswd
