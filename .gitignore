@@ -1,3 +1,2 @@
 docker-compose.production.yaml
 docker-compose.cognito.yaml
-src/.htaccess
