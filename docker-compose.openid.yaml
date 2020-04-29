@@ -1,0 +1,88 @@
+version: '3'
+services:
+  php-service:
+    build: .
+    ports:
+      - 80:80
+    environment:
+      DB_HOST: postgres-dev
+      DB_NAME: testdb
+      DB_USER: testdb
+      DB_PASS: ae9aGhi2ahlie6aeBos9ii8taex0ieChooQue1oqueith5eiyoo8quahtei7aideaviz4zuy0aesah6aboo0uRaingou2Oe7phah
+      SSLMODE: disable
+      # Preconfigured open id user:
+      # User foo - password bar
+      OPENID_ENABLED: "true"
+      OPENID_METADATA_URL: http://10.100.0.6:8080/auth/realms/localrealm/.well-known/openid-configuration
+      OPENID_CLIENT_ID: localclient
+      OPENID_SECRET: d2b11d73-1211-4372-ac3e-6c77315a7fa4
+      OPENID_REDIRECT_URL: http://10.100.0.2/redirect_uri
+      OPENID_CRYPTO_PASSPHRASE: ohdefahsohjojiequieb5ohyeuboBo7Ta6cheim9Ohdeeraefi8noo4quaLu9eiyoong7thu6ijee4EeG5cielei5eeghieco4th
+    depends_on:
+      - postgres-dev
+      - keycloak
+    volumes:
+      - ./src/:/var/www/html/
+    networks:
+      app_net:
+        ipv4_address: 10.100.0.2
+
+  postgres-dev:
+    image: postgres:9.6.11
+    environment:
+      - POSTGRES_DB=testdb
+      - POSTGRES_USER=testdb
+      - POSTGRES_PASSWORD=ae9aGhi2ahlie6aeBos9ii8taex0ieChooQue1oqueith5eiyoo8quahtei7aideaviz4zuy0aesah6aboo0uRaingou2Oe7phah
+    volumes:
+      - postgres-dev:/var/lib/postgresql/data
+      - ./db-seeds/:/docker-entrypoint-initdb.d
+    networks:
+      app_net:
+        ipv4_address: 10.100.0.3
+
+  postgres-keycloak:
+    image: postgres:9.6.11
+    environment:
+      - POSTGRES_DB=keycloak
+      - POSTGRES_USER=keycloak
+      - POSTGRES_PASSWORD=eeb8Taeyoopei0laigheetie4Aiweowuthugieyue5aeVeeT2qua9ve9ahsuoral1po8phii4aeweisahxahNaibega3xeir8nai
+    volumes:
+      - postgres-keycloak:/var/lib/postgresql/data
+    networks:
+      app_net:
+        ipv4_address: 10.100.0.4
+
+  keycloak:
+    # image: quay.io/keycloak/keycloak:9.0.3
+    image: jboss/keycloak:9.0.3
+    ports:
+      - 8080:8080
+    volumes:
+      - ./keycloak-config/:/keycloak-config/
+    environment:
+      KEYCLOAK_USER: localadmin
+      KEYCLOAK_PASSWORD: hohjues3toh1eiVisothangeish4ohSh
+      KEYCLOAK_IMPORT: /keycloak-config/local_realm.json
+      DB_VENDOR: postgres
+      DB_ADDR: postgres-keycloak
+      DB_DATABASE: keycloak
+      DB_USER: keycloak
+      DB_PASSWORD: eeb8Taeyoopei0laigheetie4Aiweowuthugieyue5aeVeeT2qua9ve9ahsuoral1po8phii4aeweisahxahNaibega3xeir8nai
+    depends_on:
+      - postgres-keycloak
+    networks:
+      app_net:
+        ipv4_address: 10.100.0.6
+
+volumes:
+  postgres-dev:
+    driver: local
+  postgres-keycloak:
+    driver: local
+
+networks:
+  app_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24

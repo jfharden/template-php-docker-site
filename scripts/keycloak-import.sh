@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker-compose exec keycloak /opt/jboss/keycloak/bin/standalone.sh \
+docker-compose -f docker-compose.openid.yaml exec keycloak /opt/jboss/keycloak/bin/standalone.sh \
   -Djboss.socket.binding.port-offset=100 \
   -Dkeycloak.migration.action=import \
   -Dkeycloak.migration.provider=singleFile \
