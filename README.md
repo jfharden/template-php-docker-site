@@ -7,7 +7,7 @@
    the tests work as-is `go test -v`
 3. Replace everywhere that says `php-service` (in `docker-compose.yaml`, `Dockerfile`, 
    `scripts/create-production-docker-compose.sh`) with the name of your project
-4. Put your code in src/ directory (along with the already existing .htaccess, replace the index.php file there
+4. Put your code in src/ directory (replace the index.php and loggedout.php files there
    already)
 5. Edit the SSM\_PREFIX env var in /scripts/create-production-docker-compose.sh
 6. Put an sql, or sql.gz file in `/db-seeds/seeds.sql.gz` which has the seeds for your db test data (incl. structure)
