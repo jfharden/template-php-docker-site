@@ -16,7 +16,7 @@ import (
 
 type RunTestOptions struct {
 	DockerComposeFile string
-	Validators        []func(*testing.T)
+	Validators        []func(*testing.T, *RunTestOptions)
 	WaitForReady      func()
 	EnvVars           map[string]string
 }
@@ -24,14 +24,19 @@ type RunTestOptions struct {
 func TestDockerfile(t *testing.T) {
 	options := &RunTestOptions{
 		DockerComposeFile: "docker-compose.yaml",
-		Validators: []func(*testing.T){
+		Validators: []func(*testing.T, *RunTestOptions){
 			validateServerHeaderProd,
 			validatePhpHardeningConfigApplied,
 			validateDirectoryListingDenied,
 			validateIndexOk,
 		},
 		WaitForReady: func() { time.Sleep(10 * time.Second) },
-		EnvVars:      map[string]string{},
+		EnvVars: map[string]string{
+			"HTTP_PORT":   "8180",
+			"APP_IP":      "10.101.0.2",
+			"APP_DB_IP":   "10.101.0.3",
+			"SUBNET_CIDR": "10.101.0.0/24",
+		},
 	}
 
 	runTestsWithDockerComposeFile(t, options)
@@ -40,13 +45,18 @@ func TestDockerfile(t *testing.T) {
 func TestHtpasswdAuth(t *testing.T) {
 	options := &RunTestOptions{
 		DockerComposeFile: "docker-compose.htpasswd.yaml",
-		Validators: []func(*testing.T){
+		Validators: []func(*testing.T, *RunTestOptions){
 			validateRequiresAuth,
 			validateUnauthorizedPageExcludesSignature,
 			validateIndexOkHtpasswdAuth,
 		},
 		WaitForReady: func() { time.Sleep(10 * time.Second) },
-		EnvVars:      map[string]string{},
+		EnvVars: map[string]string{
+			"HTTP_PORT":   "8280",
+			"APP_IP":      "10.102.0.2",
+			"APP_DB_IP":   "10.102.0.3",
+			"SUBNET_CIDR": "10.102.0.0/24",
+		},
 	}
 
 	runTestsWithDockerComposeFile(t, options)
@@ -89,39 +99,39 @@ func runTestsWithDockerComposeFile(t *testing.T, options *RunTestOptions) {
 
 	test_structure.RunTestStage(t, "validate", func() {
 		for _, validator := range options.Validators {
-			validator(t)
+			validator(t, options)
 		}
 	})
 }
 
-func validateRequiresAuth(t *testing.T) {
-	statusCode, body := http_helper.HttpGet(t, "http://127.0.0.1/index.php", &tls.Config{})
+func validateRequiresAuth(t *testing.T, options *RunTestOptions) {
+	statusCode, body := http_helper.HttpGet(t, urlWithoutAuth(options, "index.php"), &tls.Config{})
 
 	assert.Equal(t, 401, statusCode)
 	assert.Contains(t, body, "Unauthorized")
 }
 
-func validateUnauthorizedPageExcludesSignature(t *testing.T) {
-	statusCode, body := http_helper.HttpGet(t, "http://127.0.0.1/index.php", &tls.Config{})
+func validateUnauthorizedPageExcludesSignature(t *testing.T, options *RunTestOptions) {
+	statusCode, body := http_helper.HttpGet(t, urlWithoutAuth(options, "index.php"), &tls.Config{})
 
 	assert.Equal(t, 401, statusCode)
 	assert.NotContains(t, body, "Apache")
 }
 
-func validateIndexOk(t *testing.T) {
-	statusCode, _ := http_helper.HttpGet(t, "http://127.0.0.1/", &tls.Config{})
+func validateIndexOk(t *testing.T, options *RunTestOptions) {
+	statusCode, _ := http_helper.HttpGet(t, urlWithoutAuth(options, ""), &tls.Config{})
 
 	assert.Equal(t, 200, statusCode)
 }
 
-func validateIndexOkHtpasswdAuth(t *testing.T) {
-	statusCode, _ := http_helper.HttpGet(t, urlWithBasicAuth(""), &tls.Config{})
+func validateIndexOkHtpasswdAuth(t *testing.T, options *RunTestOptions) {
+	statusCode, _ := http_helper.HttpGet(t, urlWithBasicAuth(options, ""), &tls.Config{})
 
 	assert.Equal(t, 200, statusCode)
 }
 
-func validateServerHeaderProd(t *testing.T) {
-	headers := getHeaders(t, "http://127.0.0.1/index.php")
+func validateServerHeaderProd(t *testing.T, options *RunTestOptions) {
+	headers := getHeaders(t, urlWithoutAuth(options, "index.php"))
 
 	serverHeaders := headers["Server"]
 
@@ -131,16 +141,16 @@ func validateServerHeaderProd(t *testing.T) {
 	return
 }
 
-func validatePhpHardeningConfigApplied(t *testing.T) {
-	headers := getHeaders(t, urlWithBasicAuth(""))
+func validatePhpHardeningConfigApplied(t *testing.T, options *RunTestOptions) {
+	headers := getHeaders(t, urlWithBasicAuth(options, ""))
 
 	poweredByHeaders := headers["X-Powered-By"]
 
 	assert.Empty(t, poweredByHeaders, "X-Powdered-By was returned, PHP hardening config has not been applied")
 }
 
-func validateDirectoryListingDenied(t *testing.T) {
-	statusCode, body := http_helper.HttpGet(t, urlWithBasicAuth("images/"), &tls.Config{})
+func validateDirectoryListingDenied(t *testing.T, options *RunTestOptions) {
+	statusCode, body := http_helper.HttpGet(t, urlWithBasicAuth(options, "images/"), &tls.Config{})
 
 	assert.Equal(t, 403, statusCode)
 	assert.Contains(t, body, "Forbidden")
@@ -165,6 +175,22 @@ func getHeaders(t *testing.T, url string) http.Header {
 	return resp.Header
 }
 
-func urlWithBasicAuth(path string) string {
-	return fmt.Sprintf("http://foo:bar@127.0.0.1/%s", path)
+func urlWithoutAuth(options *RunTestOptions, path string) string {
+	ip := appIp(options)
+	return fmt.Sprintf("http://%s/%s", ip, path)
+}
+
+func urlWithBasicAuth(options *RunTestOptions, path string) string {
+	ip := appIp(options)
+	return fmt.Sprintf("http://foo:bar@%s/%s", ip, path)
+}
+
+func appIp(options *RunTestOptions) string {
+	ip, ok := options.EnvVars["APP_IP"]
+
+	if !ok {
+		return "10.100.0.2"
+	}
+
+	return ip
 }
