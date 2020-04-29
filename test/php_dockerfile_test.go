@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/gruntwork-io/terratest/modules/docker"
 	http_helper "github.com/gruntwork-io/terratest/modules/http-helper"
 	"github.com/gruntwork-io/terratest/modules/logger"
@@ -15,100 +14,81 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type PageStructureOptions struct {
-	SearchTerm           string
-	NumberOfResults      int
-	SelectedSearchFields *SelectedSearchFields
-	ResultRows           []*ResultRow
-}
-
-func NewPageStructureOptions(searchTerm string, numberOfResults int) *PageStructureOptions {
-	return &PageStructureOptions{
-		SearchTerm:           searchTerm,
-		NumberOfResults:      numberOfResults,
-		SelectedSearchFields: &SelectedSearchFields{},
-		ResultRows:           []*ResultRow{},
-	}
-}
-
-type ResultRow struct {
-	DBID  string
-	Title string
-	Year  string
-}
-
-type SelectedSearchFields struct {
-	Years   []string
-	Ratings []string
-	Genres  []string
-	Types   []string
-}
-
-type SearchFieldQuery struct {
-	Form           *goquery.Selection
-	Name           string
-	ValuesInclude  map[string]string
-	SelectedValues []string
+type RunTestOptions struct {
+	DockerComposeFile string
+	Validators        []func(*testing.T)
+	WaitForReady      func()
+	EnvVars           map[string]string
 }
 
 func TestDockerfile(t *testing.T) {
-	waitForReady := func() { time.Sleep(10 * time.Second) }
-
-	validators := []func(*testing.T){
-		validateServerHeaderProd,
-		validatePhpHardeningConfigApplied,
-		validateDirectoryListingDenied,
-		validateIndexOk,
+	options := &RunTestOptions{
+		DockerComposeFile: "docker-compose.yaml",
+		Validators: []func(*testing.T){
+			validateServerHeaderProd,
+			validatePhpHardeningConfigApplied,
+			validateDirectoryListingDenied,
+			validateIndexOk,
+		},
+		WaitForReady: func() { time.Sleep(10 * time.Second) },
+		EnvVars:      map[string]string{},
 	}
 
-	runTestsWithDockerComposeFile(t, "docker-compose.yaml", validators, waitForReady)
+	runTestsWithDockerComposeFile(t, options)
 }
 
 func TestHtpasswdAuth(t *testing.T) {
-	waitForReady := func() { time.Sleep(10 * time.Second) }
-
-	validators := []func(*testing.T){
-		validateRequiresAuth,
-		validateUnauthorizedPageExcludesSignature,
-		validateIndexOkHtpasswdAuth,
+	options := &RunTestOptions{
+		DockerComposeFile: "docker-compose.htpasswd.yaml",
+		Validators: []func(*testing.T){
+			validateRequiresAuth,
+			validateUnauthorizedPageExcludesSignature,
+			validateIndexOkHtpasswdAuth,
+		},
+		WaitForReady: func() { time.Sleep(10 * time.Second) },
+		EnvVars:      map[string]string{},
 	}
 
-	runTestsWithDockerComposeFile(t, "docker-compose.htpasswd.yaml", validators, waitForReady)
+	runTestsWithDockerComposeFile(t, options)
 }
 
 // func TestOpenIdAuth(t *testing.T) {
-// 	// Keycloak tages an age to start up
-// 	// TODO Make this wait more intelligent, can't live with this wait time!
-// 	waitForReady := func() { time.Sleep(60 * time.Second) }
-//
-// 	validators := []func(*testing.T){
+// 	options := &RunTestOptions{
+// 		DockerComposeFile: "docker-compose.openid.yaml",
+// 		Validators:        []func(*testing.T){
+// 		},
+// 		// Keycloak tages an age to start up
+// 		// TODO Make this wait more intelligent, can't live with this wait time!
+// 		WaitForReady: func() { time.Sleep(60 * time.Second) },
+// 		EnvVars:      map[string]string{},
 // 	}
 //
-// 	runTestsWithDockerComposeFile(t, "docker-compose.openid.yaml", validators, waitForReady)
+// 	runTestsWithDockerComposeFile(t, options)
 // }
 
-func runTestsWithDockerComposeFile(t *testing.T, dockerfile string, validators []func(*testing.T), waitForReady func()) {
+func runTestsWithDockerComposeFile(t *testing.T, options *RunTestOptions) {
 	dockerOptions := &docker.Options{
 		WorkingDir: "../",
+		EnvVars:    options.EnvVars,
 	}
 
 	defer test_structure.RunTestStage(t, "destroy", func() {
-		docker.RunDockerCompose(t, dockerOptions, "-f", dockerfile, "down", "-v", "--rmi", "local")
+		docker.RunDockerCompose(t, dockerOptions, "-f", options.DockerComposeFile, "down", "-v", "--rmi", "local")
 	})
 
 	test_structure.RunTestStage(t, "build", func() {
-		docker.RunDockerCompose(t, dockerOptions, "-f", dockerfile, "build", "--no-cache", "--force-rm")
+		docker.RunDockerCompose(t, dockerOptions, "-f", options.DockerComposeFile, "build", "--force-rm")
 	})
 
 	test_structure.RunTestStage(t, "launch", func() {
-		docker.RunDockerCompose(t, dockerOptions, "-f", dockerfile, "up", "-d")
+		docker.RunDockerCompose(t, dockerOptions, "-f", options.DockerComposeFile, "up", "-d")
 
 		// It takes postgres a while to complete startup, load the seeds and restart
-		waitForReady()
+		options.WaitForReady()
 	})
 
 	test_structure.RunTestStage(t, "validate", func() {
-		for _, validator := range validators {
+		for _, validator := range options.Validators {
 			validator(t)
 		}
 	})
