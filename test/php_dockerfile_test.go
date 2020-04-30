@@ -67,10 +67,14 @@ func TestOpenIDAuth(t *testing.T) {
 	options := &RunTestOptions{
 		DockerComposeFile: "docker-compose.openid.yaml",
 		Validators: map[string]func(*testing.T, *RunTestOptions){
-			"ValidateRequiresOpenIDAuth":       validateRequiresOpenIDAuth,
+			"ValidateRequiresAuth":             validateRequiresAuth,
+			"ValidateRequiresOpenIDAuth":       validateInitiatesOpenIDAuth,
 			"ValidateLoggedOutDoesNotNeedAuth": validateLoggedOutDoesNotNeedAuth,
+			"ValidateAcceptsOpenIDAuth":        validateAcceptsOpenIDAuth,
+			"ValidateCompletesOpenIDLogout":    validateCompletesOpenIDLogout,
 		},
-		WaitForReady: func() { time.Sleep(10 * time.Second) },
+		// TODO: Keycloak takes an age to come to life, replace this with a real check
+		WaitForReady: func() { time.Sleep(30 * time.Second) },
 		EnvVars: map[string]string{
 			"HTTP_PORT": "8380",
 		},
@@ -115,11 +119,13 @@ func validateRequiresAuth(t *testing.T, options *RunTestOptions) {
 	assert.Contains(t, body, "Unauthorized")
 }
 
-func validateRequiresOpenIDAuth(t *testing.T, options *RunTestOptions) {
+func validateInitiatesOpenIDAuth(t *testing.T, options *RunTestOptions) {
 	url := urlWithoutAuth(options, "index.php")
 
-	openIDHelper := OpenIDHelper{
-		ProtectedUrl: url,
+	openIDHelper, err := NewOpenIDHelper(url)
+	if err != nil {
+		t.Fatalf("Failed to create OpenIDHelper: %s", err)
+		return
 	}
 
 	resp, err := openIDHelper.InitiateAuthFlow()
@@ -127,8 +133,6 @@ func validateRequiresOpenIDAuth(t *testing.T, options *RunTestOptions) {
 		t.Fatalf("Failed to initiate openid auth flow: %s", err)
 		return
 	}
-
-	fmt.Println(string(resp.Body))
 
 	assert.Equal(t, 302, resp.StatusCode, "Not redriected when trying to visit a protected url")
 	assert.Equal(t, 1, len(resp.Headers["Location"]), "Wrong number of Location headers returned")
@@ -138,6 +142,129 @@ func validateRequiresOpenIDAuth(t *testing.T, options *RunTestOptions) {
 			fmt.Sprintf("http://%s/auth/realms/localrealm/protocol/openid-connect/auth?", keycloakHost(options)),
 		),
 		"Not redirected to the correct location when trying to visit a protected url unauthenticated",
+	)
+}
+
+func validateAcceptsOpenIDAuth(t *testing.T, options *RunTestOptions) {
+	url := urlWithoutAuth(options, "index.php")
+
+	openIDHelper, err := NewOpenIDHelper(url)
+	if err != nil {
+		t.Fatalf("Failed to create OpenIDHelper: %s", err)
+		return
+	}
+
+	resp, err := openIDHelper.Authenticate("foo", "bar")
+	if err != nil {
+		t.Fatalf("Coudln't auth with openid: %s", err.Error())
+		return
+	}
+
+	assert.Equal(t, 302, resp.StatusCode, "Login to protected site did not give a redirect")
+	assert.Equal(t,
+		1,
+		len(resp.Headers["Location"]),
+		"Login to protected site did not provide exactly 1 Location header",
+	)
+	assert.Equal(t,
+		url,
+		resp.Headers["Location"][0],
+		"Login to protected site did not redirect us back to the correct URL",
+	)
+
+	resp, err = openIDHelper.GetProtectedPage(url)
+	assert.Equal(t, 200, resp.StatusCode, "Couldn't not get protected page after login")
+	assert.Contains(t, string(resp.Body), "Hello, world!", "Protected page did not have the right content after login")
+}
+
+func validateCompletesOpenIDLogout(t *testing.T, options *RunTestOptions) {
+	url := urlWithoutAuth(options, "index.php")
+
+	openIDHelper, err := NewOpenIDHelper(url)
+	if err != nil {
+		t.Fatalf("Failed to create OpenIDHelper: %s", err)
+		return
+	}
+
+	_, err = openIDHelper.Authenticate("foo", "bar")
+	if err != nil {
+		t.Fatalf("Coudln't auth with openid: %s", err.Error())
+		return
+	}
+
+	// Check login really compelted ok before logout
+	resp, err := openIDHelper.GetProtectedPage(url)
+	if resp.StatusCode != 200 {
+		t.Fatalf("Login did not complete, cannot test logout")
+		return
+	}
+
+	serverUrl := urlWithoutAuth(options, "redirect_uri")
+	redirectUrl := urlWithoutAuth(options, "loggedout.php")
+
+	resp, err = openIDHelper.InitiateLogout(serverUrl, redirectUrl)
+	if err != nil {
+		t.Fatalf("Couldn't initiate logout: %s", err.Error())
+		return
+	}
+
+	assert.Equal(t, 302, resp.StatusCode, "Server did not redirect us to provider for logout when we initiated logout")
+	assert.Equal(t,
+		1,
+		len(resp.Headers["Location"]),
+		"Logout from protected site did not provide exactly 1 Location header",
+	)
+	assert.True(t,
+		strings.HasPrefix(
+			resp.Headers["Location"][0],
+			fmt.Sprintf("http://%s/auth/realms/localrealm/protocol/openid-connect/logout?", keycloakHost(options)),
+		),
+		"Not redirected to the correct location at the provider when trying to logout",
+	)
+
+	// Complete the logout and verify we come back to our unprotected url
+	resp, err = openIDHelper.CompleteLogout()
+	if err != nil {
+		t.Fatalf("Couldn't complete logout: %s", err.Error())
+		return
+	}
+
+	assert.Equal(t, 302, resp.StatusCode, "Provider did not redirect us back to the protected server")
+	assert.Equal(t,
+		1,
+		len(resp.Headers["Location"]),
+		"Logout from provider did not provide exactly 1 Location header",
+	)
+	assert.Equal(t,
+		redirectUrl,
+		resp.Headers["Location"][0],
+		"Not redirected back to the expected url on return from provider during logout",
+	)
+
+	// Make sure logout has completed by getting a protected url and expecting a redirect back to login.
+	// We have to do this with the same openIDHelper to make sure all the cookies that have been set are
+	// still there, otherwise this is just a test of an unauthorised client
+	//
+	// When we initiate the auth flow we visit the original protected page, and we expect to get redirected
+	// if we are no longer authenticated
+	resp, err = openIDHelper.InitiateAuthFlow()
+	if err != nil {
+		t.Fatalf("Couldn't initiate auth flow after logout: %s", err.Error())
+		return
+	}
+
+	assert.Equal(t,
+		302,
+		resp.StatusCode,
+		"After logout we were not redirected to login when trying to get a protected page",
+	)
+	assert.Equal(t, 1, len(resp.Headers["Location"]), "Wrong number of Location headers returned")
+	assert.True(t,
+		strings.HasPrefix(
+			resp.Headers["Location"][0],
+			fmt.Sprintf("http://%s/auth/realms/localrealm/protocol/openid-connect/auth?", keycloakHost(options)),
+		),
+		"Not redirected to the correct location when trying to visit a protected url after logout",
 	)
 }
 
