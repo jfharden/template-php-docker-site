@@ -76,7 +76,7 @@
    user pool
 5. Terratest tests which will
     1. Build and launch the docker file
-    2. Run a few tests to check for hardening, htpasswd basic auth, and that index.php can be retrieved.
+    2. Run a validations to check for hardening, htpasswd basic auth, openid auth, and that index.php can be retrieved.
     3. Are written with stages (which can be individually skipped by setting env vars SKIP\_\<stage\>,
        e.g. SKIP_build=true):
         1. build (docker-compose build)
