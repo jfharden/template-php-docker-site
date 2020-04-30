@@ -1,0 +1,30 @@
+version: '3'
+services:
+  php-service:
+    build: .
+    ports:
+      - ${HTTP_PORT:-80}:80
+    environment:
+      DB_HOST: postgres-dev
+      DB_NAME: testdb
+      DB_USER: testdb
+      DB_PASS: ae9aGhi2ahlie6aeBos9ii8taex0ieChooQue1oqueith5eiyoo8quahtei7aideaviz4zuy0aesah6aboo0uRaingou2Oe7phah
+      SSLMODE: disable
+    depends_on:
+      - postgres-dev
+    volumes:
+      - ./src/:/var/www/html/
+
+  postgres-dev:
+    image: postgres:9.6.11
+    environment:
+      - POSTGRES_DB=testdb
+      - POSTGRES_USER=testdb
+      - POSTGRES_PASSWORD=ae9aGhi2ahlie6aeBos9ii8taex0ieChooQue1oqueith5eiyoo8quahtei7aideaviz4zuy0aesah6aboo0uRaingou2Oe7phah
+    volumes:
+      - postgres-dev:/var/lib/postgresql/data
+      - ./config/db-seeds/:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres-dev:
+    driver: local
