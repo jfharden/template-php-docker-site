@@ -1,0 +1,14 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      golang: 1.13
+  pre-build:
+    commands:
+        - cd test/
+        - go mod init github.com/jfharden/template-php-docker-site
+        - go mod download
+  build:
+      commands:
+        - go test
